@@ -9,22 +9,19 @@ import Data.Void
 import Bwd
 import Disp
 
-data ParEnv = ParEnv
-  { parDispEnv :: DispEnv
-  , parLevs :: Lev String
-  }
+type ParEnv = DispEnv
 
 parInxs :: ParEnv -> Bwd String
-parInxs (ParEnv (DispEnv iz) _) = iz
+parInxs (DispEnv _ iz) = iz
 
 bindInx :: String -> ParEnv -> ParEnv
-bindInx i (ParEnv (DispEnv iz) ips) = ParEnv (DispEnv (iz :< i)) ips
+bindInx i (DispEnv l iz) = DispEnv l (iz :< i)
 
 newtype Par t = Par {par :: ParEnv -> String -> Maybe (t, String)}
 
 parse :: Lev String -> Par t -> String -> Maybe t
-parse ips p s = do
-  (t, s) <- par p (ParEnv dispE0 ips) s
+parse l p s = do
+  (t, s) <- par p (DispEnv l B0) s
   guard $ all isSpace s
   return t
 
@@ -77,4 +74,4 @@ pLev :: Par (String, Int)
 pLev = (levs <$> pEnv) >>= go where
   go B0 = empty
   go (xz :< (x, l)) = (x, l) <$ punc x <|> go xz
-  levs (ParEnv _ (lz, _)) = lz
+  levs (DispEnv (lz, _) _) = lz
