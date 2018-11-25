@@ -11,7 +11,6 @@ data Lisp t
   = A String
   | Lisp t :& Lisp t
   | String :. Lisp t
-  | String :! Lisp t
   | I Point
   | E t
 
@@ -24,8 +23,7 @@ pLisp p
 
 pAtom :: Par t -> String -> Par (Lisp t)
 pAtom p x
-  =   (x :.) <$ spc <* punc "." <* spc <*> pLoc (bindX x) (pLisp p)
-  <|> (x :!) <$ spc <* punc "|" <* spc <*> pLoc (bindI x) (pLisp p)
+  =   (x :.) <$ spc <* punc "." <* spc <*> pLoc (bindInx x) (pLisp p)
   <|> pure (A x)
 
 pCdr :: Par t -> Par (Lisp t)
@@ -41,10 +39,8 @@ instance Disp t => Disp (Lisp t) where
     cdr (A "") = "]"
     cdr (a :& d) = " " ++ disp e a ++ cdr d
     cdr d = ", " ++ disp e d ++ "]"
-  disp e (x :. b) = n ++ "." ++ disp (e {termDisp = termDisp e :< n}) b where
-    n = freshen (termDisp e) x
-  disp e (x :! b) = n ++ "|" ++ disp (e {termDisp = intvDisp e :< n}) b where
-    n = freshen (intvDisp e) x
+  disp e (x :. b) = n ++ "." ++ disp e' b where
+    (e', n) = freshen e x
   disp e (I p) = "{" ++ disp e p ++ "}"
   disp e (E t) = "(" ++ disp e t ++ ")"
 

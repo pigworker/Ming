@@ -19,7 +19,7 @@ pElim = pWeeElim >>= pMoreElim
 
 pWeeElim :: Par Elim
 pWeeElim
-  =   EV <$> pInx seekX
+  =   EV <$> pInx
   <|> EP <$> iden
 
 pMoreElim :: Elim -> Par Elim
@@ -32,7 +32,7 @@ pTerm = pLisp pElim
 
 instance Disp Elim where
   disp e (EP x) = x
-  disp e (EV i) = termDisp e <? i
+  disp e (EV i) = inxNames e <? i
   disp e (f :$ s) = disp e f ++ " " ++ disp e s
 
 instance Show Elim where

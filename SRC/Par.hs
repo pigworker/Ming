@@ -11,21 +11,14 @@ import Disp
 
 data ParEnv = ParEnv
   { parDispEnv :: DispEnv
-  , parIPs :: Lev String
+  , parLevs :: Lev String
   }
 
-bindI :: String -> ParEnv -> ParEnv
-bindI i (ParEnv (DispEnv iz xz) ips) = ParEnv (DispEnv (iz :< i) xz) ips
+parInxs :: ParEnv -> Bwd String
+parInxs (ParEnv (DispEnv iz) _) = iz
 
-seekI :: ParEnv -> Bwd String
-seekI (ParEnv (DispEnv iz _) _) = iz
-
-bindX :: String -> ParEnv -> ParEnv
-bindX x (ParEnv (DispEnv iz xz) ips) = ParEnv (DispEnv iz (xz :< x)) ips
-
-seekX :: ParEnv -> Bwd String
-seekX (ParEnv (DispEnv _ xz) _) = xz
-
+bindInx :: String -> ParEnv -> ParEnv
+bindInx i (ParEnv (DispEnv iz) ips) = ParEnv (DispEnv (iz :< i)) ips
 
 newtype Par t = Par {par :: ParEnv -> String -> Maybe (t, String)}
 
@@ -75,13 +68,13 @@ spc = () <$ many (eat isSpace)
 pEnv :: Par ParEnv
 pEnv = Par $ \ e s -> Just (e, s)
 
-pInx :: (ParEnv -> Bwd String) -> Par Int
-pInx g = (g <$> pEnv) >>= go where
+pInx :: Par Int
+pInx = (parInxs <$> pEnv) >>= go where
   go B0 = empty
   go (xz :< x) = 0 <$ punc x <|> (1 +) <$> go xz
 
-pLev :: (ParEnv -> Lev String) -> Par (String, Int)
-pLev g = (g <$> pEnv) >>= (go . fst) where
+pLev :: Par (String, Int)
+pLev = (levs <$> pEnv) >>= go where
   go B0 = empty
   go (xz :< (x, l)) = (x, l) <$ punc x <|> go xz
-
+  levs (ParEnv _ (lz, _)) = lz

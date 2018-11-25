@@ -55,7 +55,7 @@ instance Bind Point Point where
   abst _ _ p = p
 
 instance Disp Point where
-  disp e (IV i) = intvDisp e <? i
+  disp e (IV i) = inxNames e <? i
   disp e (IP (x, _)) = x
   disp e I0 = "0"
   disp e I1 = "1"
@@ -72,8 +72,8 @@ pWeePoint :: Par Point
 pWeePoint
   =   I0 <$ punc "0"
   <|> I1 <$ punc "1"
-  <|> IV <$> pInx seekI
-  <|> IP <$> pLev parIPs
+  <|> IV <$> pInx
+  <|> IP <$> pLev
 
 pMorePoint :: Point -> Par Point
 pMorePoint p = (grow >>= pMorePoint) <|> pure p where
