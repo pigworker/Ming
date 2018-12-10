@@ -8,6 +8,7 @@ import Data.Void
 
 import Bwd
 import Disp
+import Bind
 
 type ParEnv = DispEnv
 
@@ -65,6 +66,9 @@ spc = () <$ many (eat isSpace)
 pEnv :: Par ParEnv
 pEnv = Par $ \ e s -> Just (e, s)
 
+pLI :: Par LI
+pLI = Inx <$> pInx <|> Lev <$> pLev
+
 pInx :: Par Int
 pInx = (parInxs <$> pEnv) >>= go where
   go B0 = empty
@@ -75,3 +79,7 @@ pLev = (levs <$> pEnv) >>= go where
   go B0 = empty
   go (xz :< (x, l)) = (x, l) <$ punc x <|> go xz
   levs (DispEnv (lz, _) _) = lz
+
+pBwd :: Par x -> Par (Bwd x)
+pBwd p = (p >>= \ x -> mo (B0 :< x)) <|> pure B0 where
+  mo xz = ((spc *> p) >>= \ x -> mo (xz :< x)) <|> pure xz
