@@ -16,6 +16,14 @@ _*_ : Set -> Set -> Set
 S * T = Sg S \ _ -> T
 infixr 4 _*_
 
+data Mebbe (X : Set) : Set where
+  aye : X -> Mebbe X
+  naw : Mebbe X
+
+_>>=_ : {A B : Set} -> Mebbe A -> (A -> Mebbe B) -> Mebbe B
+aye a >>= k = k a
+naw   >>= _ = naw
+
 the : (X : Set) -> X -> X
 the X x = x
 
