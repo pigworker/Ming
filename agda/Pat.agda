@@ -23,22 +23,22 @@ Stan : {m : Nat} -> Pat m -> Nat -> Set
 Stan ($ x)     n = One
 Stan (pa , pd) n = Stan pa n * Stan pd n
 Stan (! p)     n = Stan p n
-Stan [? th ]   n = Term (n +N domo th) chk
+Stan [? th ]   n = Term [] (n +N domo th) chk
 
 -- instantiation plugs those terms in the holes
 -- you can see it as specifying what a successful match is
-stan : {m n : Nat}(p : Pat m)(ts : Stan p n) -> Term (n +N m) chk
+stan : {m n : Nat}(p : Pat m)(ts : Stan p n) -> Term [] (n +N m) chk
 stan ($ x)     <>           = $ x
 stan (pa , pd) (tsa , tsd)  = stan pa tsa , stan pd tsd
 stan (! p)     ts           = ! stan p ts
-stan [? th ]   t            = t ^T oi +th th
+stan [? th ]   t            = t ^T (oi +th th)
 
 -- lift to account for damnation
 MStan : {m : Nat} -> Mebbe (Pat m) -> Nat -> Set
 MStan (aye p) n = Stan p n
 MStan naw     n = Zero
 
-mstan : {m n : Nat}(p : Mebbe (Pat m))(ts : MStan p n) -> Term (n +N m) chk
+mstan : {m n : Nat}(p : Mebbe (Pat m))(ts : MStan p n) -> Term [] (n +N m) chk
 mstan (aye p) ts = stan p ts
 mstan naw     ()
 
@@ -53,13 +53,13 @@ stanThin (pa , pd) th (tsa' , tsd') with stanThin pa th tsa' | stanThin pd th ts
 stanThin (! p) th ts' with stanThin p (th os) ts'
 ... | ts , q rewrite q = _ , refl
 stanThin [? ph ] th t' = t' , (
-  (t' ^T oi +th (ph - th))
+  (t' ^T (oi +th (ph - th)))
     =< (t' ^T_) $= ((_+th (ph - th)) $= (oi -oi)) ]=
   (t' ^T ((oi - oi) +th (ph - th)))
     =[ (t' ^T_) $= [ oi - oi ]+th[ ph - th ] >=
   (t' ^T (oi +th ph - oi +th th))
     =[ t' ^T[ oi +th ph - oi +th th ] >=
-  (t' ^T oi +th ph ^T oi +th th)
+  (t' ^T (oi +th ph) ^T (oi +th th))
     [QED])
 
 -- Refine p r says that r is a refinement of p
@@ -120,7 +120,7 @@ restrictRefine th [? ph ] with pullback th ph
 
 -- if a thinned term matches a pattern,
 -- then the original term would match the restricted pattern
-restrictStan : {k n m : Nat}(th : n <= m)(p : Pat m)(t : Term (k +N n) chk)
+restrictStan : {k n m : Nat}(th : n <= m)(p : Pat m)(t : Term [] (k +N n) chk)
                (ts : Stan p k) -> (t ^T oi +th th) == stan p ts ->
                Stan (restrict th p ^P th) k
 -- yet again, the concrete structure is no trouble
@@ -135,6 +135,7 @@ restrictStan th (! p)   (_ , _) ts ()
 restrictStan th (! p)     (! t) ts q = termNoConf q \ q' ->
   restrictStan (th os) p t ts q'
 restrictStan th (! p) [ t ] ts ()
+restrictStan _ _ (() // _) _ _
 -- for pullbacks, we need that a term in the image of two thinnings
 -- is in the image of the pullback
 restrictStan {k} th [? ph ] t0 t1 q with thinPullback t0 (oi +th th) t1 (oi +th ph) q
@@ -191,3 +192,93 @@ patUgen p0@($ _)   [? ph ] ts t q = restrictStan ph p0 t ts (sym q)
 patUgen p0@(_ , _) [? ph ] ts t q = restrictStan ph p0 t ts (sym q)
 patUgen p0@(! _)   [? ph ] ts t q = restrictStan ph p0 t ts (sym q)
 patUgen [? th ] p1 t ts q = restrictStan th p1 t ts q
+
+weaks : forall {n m} -> SUBST [] n m -> (k : Nat) -> SUBST [] (n +N k) (m +N k)
+weaks sg ze = sg
+weaks sg (k su) = weak (weaks sg k) where open Mor Subst
+
+weaksLemma : forall {n m l k}(sg : SUBST [] n m)(th : l <= k) ->
+  select (oi +th th) (weaks sg k) == (pure (_^T oi +th th) <*> weaks sg l)
+weaksLemma sg (th o') = 
+  select (oi +th th) (pure (_^T oi o') <*> weaks sg _)
+    =[ selectApp (oi +th th) _ _  >=
+  (select (oi +th th) (pure (_^T oi o')) <*> select (oi +th th) (weaks sg _))
+    =[ reff _<*>_ =$= selectPure (oi +th th) _ =$= weaksLemma sg th >=
+  (pure (_^T oi o') <*> (pure (_^T oi +th th) <*> weaks sg _))
+    =[ bVecMapMap (_^T oi o') (_^T oi +th th) _ >=
+  (pure ((_^T oi o') ` (_^T oi +th th)) <*> weaks sg _)
+    =[ bVecMapExt _ _ (\ t ->
+         (t ^T oi +th th ^T oi o')
+           =< t ^T[ oi +th th - oi o' ] ]=
+         (t ^T oi +th th - oi o')
+           =[ (t ^T_) $= (_o' $= (_ -oi)) >=
+         (t ^T (oi +th th) o')
+           [QED]
+    ) (weaks sg _) >=
+  (pure (_^T (oi +th th) o') <*> weaks sg _)
+    [QED]
+weaksLemma sg (th os) = reff _&_
+  =$= (select (oi +th th) (pure (_^T oi o') <*> weaks sg _)
+         =[ selectApp (oi +th th) _ _ >=
+       (select (oi +th th) (pure (_^T oi o')) <*> select (oi +th th) (weaks sg _))
+         =[ reff _<*>_ =$= selectPure (oi +th th) _ =$= weaksLemma sg th >=
+       (pure (_^T oi o') <*> (pure (_^T oi +th th) <*> weaks sg _))
+         =[ bVecMapMap (_^T oi o') (_^T oi +th th) _ >=
+       (pure ((_^T oi o') ` (_^T oi +th th)) <*> weaks sg _)
+         =[ bVecMapExt _ _ (\ t -> 
+            (t ^T oi +th th ^T oi o')
+              =< t ^T[ oi +th th - oi o' ] ]=
+            (t ^T (oi +th th - oi) o')
+              =[ (t ^T_) $= (_o' $= (
+                 (oi +th th - oi)
+                   =[ (oi +th th) -oi >=
+                 (oi +th th)
+                   =< oi- (oi +th th) ]=
+                 (oi - oi +th th)
+                   [QED])) >=
+            (t ^T (oi - oi +th th) o')
+              =[ t ^T[ oi o' - (oi +th th) os ] >=
+            (t ^T oi o' ^T (oi +th th) os)
+              [QED]
+         ) (weaks sg _) >=
+       (pure ((_^T (oi +th th) os) ` (_^T oi o')) <*> weaks sg _)
+         =< bVecMapMap (_^T (oi +th th) os) (_^T oi o') _ ]=
+       (pure (_^T (oi +th th) os) <*> (pure (_^T oi o') <*> weaks sg _))
+         [QED])
+  =$= (#_ $= (_os $= oe! _ _))
+weaksLemma sg oz =
+  select oi sg
+    =[ selectoi sg >=
+  sg
+    =< bVecIdentity (_^T oi) _^Toi sg ]=
+  (pure (_^T oi) <*> sg)
+    [QED]
+
+subStan : forall {n m k}(p : Pat k)(ts : Stan p n)(sg : SUBST [] n m) ->
+  Sg (Stan p m) \ ts' -> (stan p ts $T weaks sg k) == stan p ts'
+subStan ($ x) <> sg = <> , refl
+subStan (pa , pd) (tsa , tsd) sg with subStan pa tsa sg | subStan pd tsd sg
+... | tsa' , qa | tsd' , qd = (tsa' , tsd') , reff _,_ =$= qa =$= qd
+subStan (! p) ts sg with subStan p ts sg
+... | ts' , q = ts' , !_ $= q
+subStan {k = k} ([?_] {l} th) t sg = (t $T weaks sg l) ,
+  ((t ^T oi +th th) $T weaks sg k)
+    =[ t ^$T[ oi +th th - weaks sg k ] >=
+  (t $T select (oi +th th) (weaks sg k))
+    =[ (t $T_) $= weaksLemma sg th >=
+  (t $T (pure (_^T oi +th th) <*> weaks sg l))
+    =< t $^T[ weaks sg l - oi +th th ] ]=
+  ((t $T weaks sg l) ^T oi +th th)
+   [QED]
+
+patSig : forall {n} -> Pat n -> Bwd Nat
+patSig ($ x) = []
+patSig (pa , pd) = patSig pa +B patSig pd
+patSig (! p) = patSig p
+patSig [? th ] = [] & domo th
+
+stanEnv : forall {n m}(p : Pat n) -> Stan p m -> Env (patSig p) m
+stanEnv ($ x) ts = []
+stanEnv (pa , pd) (tsa , tsd) = stanEnv pa tsa +A stanEnv pd tsd
+stanEnv (! p) ts = stanEnv p ts
+stanEnv [? th ] t = [] & t

@@ -235,3 +235,24 @@ elemLemma (th os) (.oe os) | refl with oe! (oe - th) (oe - th)
 elemLemma (th os) (.oe os) | refl | refl = refl
 elemLemma oz ()
 
+select : forall {n m X} -> n <= m -> BVec X m -> BVec X n
+select (th o') (xz & x) = select th xz
+select (th os) (xz & x) = select th xz & x
+select oz xz = []
+
+selectoi : forall {n X}(xz : BVec X n) -> select oi xz == xz
+selectoi [] = refl
+selectoi (xz & x) = (_& _) $= selectoi xz
+
+selectPure : forall {n m X}(th : n <= m)(x : X) -> select th (pure x) == pure x
+selectPure (th o') x = selectPure th x
+selectPure (th os) x = (_& _) $= selectPure th x
+selectPure oz x = refl
+
+selectApp :  forall {n m S T}
+  (th : n <= m)(fz : BVec (S -> T) m)(sz : BVec S m) ->
+  select th (fz <*> sz) == (select th fz <*> select th sz)
+selectApp (th o') (fz & f) (sz & s) = selectApp th fz sz
+selectApp (th os) (fz & f) (sz & s) = (_& _) $= selectApp th fz sz
+selectApp oz [] [] = refl
+  

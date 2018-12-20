@@ -10,15 +10,15 @@ open import Pat
 --   either in the image of a thinning
 --   or contains an offending variable
 
-data Thicken {n m : Nat}(th : n <= m){d : Dir} : Term m d -> Set where
-  thinned  : (t : Term n d) -> Thicken th (t ^T th)
+data Thicken {n m : Nat}(th : n <= m){d : Dir} : Term [] m d -> Set where
+  thinned  : (t : Term [] n d) -> Thicken th (t ^T th)
   thwarted : (x : 1 <= miss th){k : Nat}(t' : Term' m k d) ->
               Thicken th (t' +T (# (x - (not th - oterm' t'))))
 
 -- we show these cases do not overlap
 thwartedness : {n m : Nat}(th : n <= m){d : Dir}
   (x : 1 <= miss th){k : Nat}(t' : Term' m k d)
-  (t : Term n d) -> (t ^T th) == (t' +T (# (x - (not th - oterm' t')))) -> Zero
+  (t : Term [] n d) -> (t ^T th) == (t' +T (# (x - (not th - oterm' t')))) -> Zero
 thwartedness th x hole (# y) q with y - th | notLemma th y x
 thwartedness th x hole (# y) refl | .(x - (not th - oi)) | b rewrite not th -oi
   = b refl
@@ -61,11 +61,12 @@ thwartedness th x (_ </ _) (_ :: _) ()
 thwartedness th x (_ </ _) (# _) ()
 thwartedness th x (_ /> _) (_ :: _) ()
 thwartedness th x (_ /> _) (# _) ()
+thwartedness th x _ (() // _) _
 
 
 -- we may now define thickening
 
-thicken : {n m : Nat}(th : n <= m){d : Dir}(t : Term m d) -> Thicken th t
+thicken : {n m : Nat}(th : n <= m){d : Dir}(t : Term [] m d) -> Thicken th t
 thicken th ($ x) = thinned ($ x)
 thicken th (s , t) with thicken th s | thicken th t
 thicken th (.(s ^T th) , .(t ^T th)) | thinned s | thinned t = thinned (s , t)
@@ -91,11 +92,12 @@ thicken th (e / s) with thicken th e | thicken th s
 thicken th (.(e ^T th) / .(s ^T th)) | thinned e | thinned s = thinned (e / s)
 thicken th (e / .(s' +T (# (x - (not th - oterm' s'))))) | thinned _ | thwarted x s' = thwarted x (e /> s')
 thicken th (.(e' +T (# (x - (not th - oterm' e')))) / s) | thwarted x e' | _ = thwarted x (e' </ s)
+thicken _ (() // _)
 
 
 -- we prove that a thinned term can be thickened succcessfully
 
-thickenLemma :  {n m : Nat}(th : n <= m){d : Dir}(t : Term n d) ->
+thickenLemma :  {n m : Nat}(th : n <= m){d : Dir}(t : Term [] n d) ->
   thicken th (t ^T th) == thinned t
 thickenLemma th ($ x) = refl
 thickenLemma th (ta , td) rewrite thickenLemma th ta | thickenLemma th td = refl
@@ -104,16 +106,17 @@ thickenLemma th [ e ] rewrite thickenLemma th e = refl
 thickenLemma th (t :: T) rewrite thickenLemma th t | thickenLemma th T = refl
 thickenLemma th (# x) rewrite elemLemma th x = refl
 thickenLemma th (e / s) rewrite thickenLemma th e | thickenLemma th s = refl
+thickenLemma th (() // _)
 
 -- a term matches a pattern by instantiating its holes
 -- or else there is no such instance
 
-data Match? {m n : Nat}(p : Pat m) : Term (n +N m) chk -> Set where
+data Match? {m n : Nat}(p : Pat m) : Term [] (n +N m) chk -> Set where
   yes : (ts : Stan p n) -> Match? p (stan p ts)
-  no  : {t : Term (n +N m) chk} ->
+  no  : {t : Term [] (n +N m) chk} ->
         ((ts : Stan p n) -> stan p ts == t -> Zero) -> Match? p t
 
-match? : {m n : Nat}(p : Pat m)(t : Term (n +N m) chk) -> Match? p t
+match? : {m n : Nat}(p : Pat m)(t : Term [] (n +N m) chk) -> Match? p t
 match? ($ x) ($ y) with atomEq? x y
 match? ($ x) ($ .x) | yes refl = yes <>
 match? ($ x) ($ y) | no bad = no \ { u refl -> bad refl }
@@ -126,7 +129,7 @@ match? (pa , pd) (.(stan pa tsa) , td) | yes tsa with match? pd td
 match? (pa , pd) (.(stan pa tsa) , .(stan pd tsd)) | yes tsa | yes tsd = yes (tsa , tsd)
 match? (pa , pd) (ta , td) | yes tsa | no bad = no help where
   help : (ts : Stan pa _ * Stan pd _) ->
-         _==_ {Term _ _} (stan pa (fst ts) , stan pd (snd ts)) (stan pa tsa , td) -> Zero
+         _==_ {_}{Term _ _ _} (stan pa (fst ts) , stan pd (snd ts)) (stan pa tsa , td) -> Zero
   help (_ , tsd) q with stan pa tsa
   help (_ , tsd) refl | _ = bad tsd refl
 match? (pa , pd) (ta , td) | no bad = no \ { ts refl -> bad _ refl } 
@@ -142,7 +145,7 @@ match? [? th ] t with thicken (oi +th th) t
 match? [? th ] .(t ^T (oi +th th)) | thinned t = yes t
 match? [? th ] .(t' +T (# (x - (not (oi +th th) - oterm' t')))) | thwarted x t'
   = no (thwartedness (oi +th th) x t')
-
+match? _ (() // _)
 
 -- we prove that any instance of the pattern matches it
 
