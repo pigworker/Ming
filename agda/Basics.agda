@@ -157,6 +157,11 @@ bVecMapExt : forall {n S T}(f g : S -> T)(q : (s : S) -> f s == g s) ->
 bVecMapExt f g q [] = refl
 bVecMapExt f g q (sz & s) = reff _&_ =$= bVecMapExt f g q sz =$= q s
 
+bVecMapCat : forall {S T}(f : S -> T){n m}(xz : BVec S n)(yz : BVec S m) ->
+  (pure f <*> (xz +V yz)) == ((pure f <*> xz) +V (pure f <*> yz))
+bVecMapCat f xz [] = refl
+bVecMapCat f xz (yz & y) = reff _&_ =$= bVecMapCat f xz yz =$ f y
+
 data App' (n : Nat)(X : Set) : Set1 where
   pure' : X -> App' n X
   _<*>'_ : forall {S} -> App' n (S -> X) -> App' n S -> App' n X
@@ -252,7 +257,14 @@ aproj : forall {X}{P : X -> Set}{xz x} -> El x xz -> BAll P xz -> P x
 aproj ze (pz & p) = p
 aproj (i su) (pz & p) = aproj i pz
 
+aprojbAll : forall {X}{P Q : X -> Set}{xz x}(i : El x xz)(pz : BAll P xz)
+  (f : {x : X} -> P x -> Q x) ->
+  aproj i (bAll f pz) == (f (aproj i pz))
+aprojbAll ze (pz & p) f = refl
+aprojbAll (i su) (pz & p) f = aprojbAll i pz f
+
 _+A_ : forall {X}{P}{xz yz : Bwd X} -> BAll P xz -> BAll P yz -> BAll P (xz +B yz)
 pz +A [] = pz
 pz +A (qz & p) = pz +A qz & p
 infixl 3 _+A_
+

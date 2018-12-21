@@ -193,67 +193,6 @@ patUgen p0@(_ , _) [? ph ] ts t q = restrictStan ph p0 t ts (sym q)
 patUgen p0@(! _)   [? ph ] ts t q = restrictStan ph p0 t ts (sym q)
 patUgen [? th ] p1 t ts q = restrictStan th p1 t ts q
 
-weaks : forall {n m} -> SUBST [] n m -> (k : Nat) -> SUBST [] (n +N k) (m +N k)
-weaks sg ze = sg
-weaks sg (k su) = weak (weaks sg k) where open Mor Subst
-
-weaksLemma : forall {n m l k}(sg : SUBST [] n m)(th : l <= k) ->
-  select (oi +th th) (weaks sg k) == (pure (_^T oi +th th) <*> weaks sg l)
-weaksLemma sg (th o') = 
-  select (oi +th th) (pure (_^T oi o') <*> weaks sg _)
-    =[ selectApp (oi +th th) _ _  >=
-  (select (oi +th th) (pure (_^T oi o')) <*> select (oi +th th) (weaks sg _))
-    =[ reff _<*>_ =$= selectPure (oi +th th) _ =$= weaksLemma sg th >=
-  (pure (_^T oi o') <*> (pure (_^T oi +th th) <*> weaks sg _))
-    =[ bVecMapMap (_^T oi o') (_^T oi +th th) _ >=
-  (pure ((_^T oi o') ` (_^T oi +th th)) <*> weaks sg _)
-    =[ bVecMapExt _ _ (\ t ->
-         (t ^T oi +th th ^T oi o')
-           =< t ^T[ oi +th th - oi o' ] ]=
-         (t ^T oi +th th - oi o')
-           =[ (t ^T_) $= (_o' $= (_ -oi)) >=
-         (t ^T (oi +th th) o')
-           [QED]
-    ) (weaks sg _) >=
-  (pure (_^T (oi +th th) o') <*> weaks sg _)
-    [QED]
-weaksLemma sg (th os) = reff _&_
-  =$= (select (oi +th th) (pure (_^T oi o') <*> weaks sg _)
-         =[ selectApp (oi +th th) _ _ >=
-       (select (oi +th th) (pure (_^T oi o')) <*> select (oi +th th) (weaks sg _))
-         =[ reff _<*>_ =$= selectPure (oi +th th) _ =$= weaksLemma sg th >=
-       (pure (_^T oi o') <*> (pure (_^T oi +th th) <*> weaks sg _))
-         =[ bVecMapMap (_^T oi o') (_^T oi +th th) _ >=
-       (pure ((_^T oi o') ` (_^T oi +th th)) <*> weaks sg _)
-         =[ bVecMapExt _ _ (\ t -> 
-            (t ^T oi +th th ^T oi o')
-              =< t ^T[ oi +th th - oi o' ] ]=
-            (t ^T (oi +th th - oi) o')
-              =[ (t ^T_) $= (_o' $= (
-                 (oi +th th - oi)
-                   =[ (oi +th th) -oi >=
-                 (oi +th th)
-                   =< oi- (oi +th th) ]=
-                 (oi - oi +th th)
-                   [QED])) >=
-            (t ^T (oi - oi +th th) o')
-              =[ t ^T[ oi o' - (oi +th th) os ] >=
-            (t ^T oi o' ^T (oi +th th) os)
-              [QED]
-         ) (weaks sg _) >=
-       (pure ((_^T (oi +th th) os) ` (_^T oi o')) <*> weaks sg _)
-         =< bVecMapMap (_^T (oi +th th) os) (_^T oi o') _ ]=
-       (pure (_^T (oi +th th) os) <*> (pure (_^T oi o') <*> weaks sg _))
-         [QED])
-  =$= (#_ $= (_os $= oe! _ _))
-weaksLemma sg oz =
-  select oi sg
-    =[ selectoi sg >=
-  sg
-    =< bVecIdentity (_^T oi) _^Toi sg ]=
-  (pure (_^T oi) <*> sg)
-    [QED]
-
 subStan : forall {n m k}(p : Pat k)(ts : Stan p n)(sg : SUBST [] n m) ->
   Sg (Stan p m) \ ts' -> (stan p ts $T weaks sg k) == stan p ts'
 subStan ($ x) <> sg = <> , refl
