@@ -399,6 +399,15 @@ inflated K (t :: T) f = reff _::_ =$= inflated K t f =$= inflated K T f
 inflated K (# i) f = refl
 inflated K (e / s) f = reff _/_ =$= inflated K e f =$= inflated K s f
 
+inflateId : forall {n d}(t : Term [] n d) -> inflate {[]} t == t
+inflateId ($ x) = refl
+inflateId (ta , td) = reff _,_ =$= inflateId ta =$= inflateId td
+inflateId (! t) = !_ $= inflateId t
+inflateId [ e ] = [_] $= inflateId e
+inflateId (() // _)
+inflateId (t :: T) = reff _::_ =$= inflateId t =$= inflateId T
+inflateId (# i) = refl
+inflateId (e / s) = reff _/_ =$= inflateId e =$= inflateId s
 
 
 -- substitutions -------------------------------------------------------------
@@ -438,6 +447,7 @@ module _ where
   _$T_ : forall {hz n m d}(t : Term hz n d)(ez : SUBST n m) -> Term hz m d
   t $T ez = act t ez where
     open ACTION Subst
+  infixl 3 _$T_
 
   idSubst : forall {n} -> SUBST n n
   idSubst {n = ze} = []
@@ -459,6 +469,9 @@ module _ where
   idSubstId : forall {n} -> IsIdentity {n} idSubst
   hitId  idSubstId i rewrite idSubstLemma i = refl
   weakId idSubstId = idSubstId
+
+  idSubstFact : forall {hz n d}(t : Term hz n d) -> (t $T idSubst) == t
+  idSubstFact t = actId t idSubst idSubstId
 
 module _ where
 
@@ -602,6 +615,33 @@ module _ where
     ((t $T ez) $T fz) == (t $T (pure (_$T fz) <*> ez))
   t $T[ ez - fz ] = sym (actCo t ez fz _ (substSubstSubstCo _ _ _ refl)) 
 
+  id$T- : forall {n m} (sg : SUBST n m) -> (pure (_$T idSubst) <*> sg) == sg
+  id$T- sg =
+    (pure (_$T idSubst) <*> sg)
+      =[ bVecIdentity _ idSubstFact sg >=
+    sg
+      [QED]
+
+  _-$Tid : forall {n m} (sg : SUBST n m) -> (pure (_$T sg) <*> idSubst) == sg
+  [] -$Tid = refl
+  (sg & e) -$Tid = reff _&_
+    =$= ((pure (_$T (sg & e)) <*> (pure (_^T oi o') <*> idSubst))
+          =[ bVecMapMap _ _ _ >=
+        (pure ((_$T (sg & e)) ` (_^T oi o')) <*> idSubst)
+          =[ bVecMapExt _ _ (\ t -> 
+              (t ^T oi o' $T (sg & e))
+                =[ t ^$T[ oi o' - sg & e ] >=
+              (t $T select oi sg)
+                =[ (t $T_) $= selectoi sg >=
+              (t $T sg)
+                [QED]) _ >=
+        (pure (_$T sg) <*> idSubst)
+          =[ sg -$Tid >=
+        sg
+         [QED])
+    =$= inflateId e
+
+
 Env : Bwd Nat -> Bwd Nat -> Nat -> Set
 Env hz kz m = (kz == []) * BAll (\ h -> Term [] (m +N h) chk) hz
 
@@ -676,6 +716,11 @@ module _ where
       =$= (#_ $= (_os $= oe! _ _))
     thinIdSubst oz = refl
 
+    weaksCo : forall {p n m}(th : p <= n)(ph : n <= m) k ->
+      (weaks Thin th k - weaks Thin ph k) == weaks Thin (th - ph) k
+    weaksCo th ph ze = refl
+    weaksCo th ph (k su) = _os $= weaksCo th ph k
+
     open META-COMMUTE Thin
       (\ { (refl , tz) th x ez ->
         (aproj x (bAll (\ {k} t -> t ^T (weaks Thin th k)) tz)
@@ -699,115 +744,143 @@ module _ where
         act Thin (aproj x tz $T (idSubst +V ez)) th
           [QED] })
       (\ _ _ _ -> refl)
-      {!!}
+      (\ { th (refl , tz) -> (refl ,_) $=
+         (bAll (\ {k} t -> act Thin t (weaks Thin (oi o') k))
+          (bAll (\ {k} t -> act Thin t (weaks Thin th k)) tz)
+            =[ bAllComp _ _ _ (\ {k} t -> 
+               (t ^T (weaks Thin th k) ^T weaks Thin (oi o') k)
+                 =< t ^T[ weaks Thin th k - weaks Thin (oi o') k ] ]=
+               (t ^T weaks Thin th k - weaks Thin (oi o') k)
+                 =[ (t ^T_) $= weaksCo th (oi o') k >=
+               (t ^T weaks Thin ((th - oi) o') k)
+                 =[ (\ z -> t ^T weaks Thin (z o') k) $= (th -oi) >=
+               (t ^T weaks Thin (th o') k)
+                 [QED]) tz >=
+          bAll (\ {k} t -> t ^T weaks Thin (th o') k) tz
+            =< bAllComp _ _ _ (\ {k} t -> 
+               (t ^T (weaks Thin (oi o') k) ^T weaks Thin (th os) k)
+                 =< t ^T[ weaks Thin (oi o') k - weaks Thin (th os) k ] ]=
+               (t ^T weaks Thin (oi o') k - weaks Thin (th os) k)
+                 =[ (t ^T_) $= weaksCo (oi o') (th os) k >=
+               (t ^T weaks Thin ((oi - th) o') k)
+                 =[ (\ z -> t ^T weaks Thin (z o') k) $= (oi- th) >=
+               (t ^T weaks Thin (th o') k)
+                 [QED]) tz ]=
+          bAll (\ {k} t -> act Thin t (weaks Thin (weak Thin th) k))
+           (bAll (\ {k} t -> act Thin t (weaks Thin (oi o') k)) tz)
+            [QED]
+       ) })
 
-{-
+    instantiateThin : {hz : Bwd Nat}{n m : Nat}{d : Dir}(t : Term hz n d)
+      (tz : BAll (\ h -> Term [] (n +N h) chk) hz)(th : n <= m) ->
+      instantiate (t ^T th) (bAll (_^T weaks Thin th _) tz)
+        == (instantiate t tz ^T th)
+    instantiateThin t tz th = mcommu t (refl , tz) th
 
-weaksLemma : forall {n m l k}(sg : SUBST [] n m)(th : l <= k) ->
-  select (oi +th th) (weaks sg k) == (pure (_^T oi +th th) <*> weaks sg l)
-weaksLemma sg (th o') = 
-  select (oi +th th) (pure (_^T oi o') <*> weaks sg _)
-    =[ selectApp (oi +th th) _ _  >=
-  (select (oi +th th) (pure (_^T oi o')) <*> select (oi +th th) (weaks sg _))
-    =[ reff _<*>_ =$= selectPure (oi +th th) _ =$= weaksLemma sg th >=
-  (pure (_^T oi o') <*> (pure (_^T oi +th th) <*> weaks sg _))
-    =[ bVecMapMap (_^T oi o') (_^T oi +th th) _ >=
-  (pure ((_^T oi o') ` (_^T oi +th th)) <*> weaks sg _)
-    =[ bVecMapExt _ _ (\ t ->
-         (t ^T oi +th th ^T oi o')
-           =< t ^T[ oi +th th - oi o' ] ]=
-         (t ^T oi +th th - oi o')
-           =[ (t ^T_) $= (_o' $= (_ -oi)) >=
-         (t ^T (oi +th th) o')
-           [QED]
-    ) (weaks sg _) >=
-  (pure (_^T (oi +th th) o') <*> weaks sg _)
-    [QED]
-weaksLemma sg (th os) = reff _&_
-  =$= (select (oi +th th) (pure (_^T oi o') <*> weaks sg _)
-         =[ selectApp (oi +th th) _ _ >=
-       (select (oi +th th) (pure (_^T oi o')) <*> select (oi +th th) (weaks sg _))
-         =[ reff _<*>_ =$= selectPure (oi +th th) _ =$= weaksLemma sg th >=
-       (pure (_^T oi o') <*> (pure (_^T oi +th th) <*> weaks sg _))
-         =[ bVecMapMap (_^T oi o') (_^T oi +th th) _ >=
-       (pure ((_^T oi o') ` (_^T oi +th th)) <*> weaks sg _)
-         =[ bVecMapExt _ _ (\ t -> 
-            (t ^T oi +th th ^T oi o')
-              =< t ^T[ oi +th th - oi o' ] ]=
-            (t ^T (oi +th th - oi) o')
-              =[ (t ^T_) $= (_o' $= (
-                 (oi +th th - oi)
-                   =[ (oi +th th) -oi >=
-                 (oi +th th)
-                   =< oi- (oi +th th) ]=
-                 (oi - oi +th th)
-                   [QED])) >=
-            (t ^T (oi - oi +th th) o')
-              =[ t ^T[ oi o' - (oi +th th) os ] >=
-            (t ^T oi o' ^T (oi +th th) os)
-              [QED]
-         ) (weaks sg _) >=
-       (pure ((_^T (oi +th th) os) ` (_^T oi o')) <*> weaks sg _)
-         =< bVecMapMap (_^T (oi +th th) os) (_^T oi o') _ ]=
-       (pure (_^T (oi +th th) os) <*> (pure (_^T oi o') <*> weaks sg _))
+  module _ where
+
+    mapWeaks : forall {n m h}(sg : SUBST n m)(ez : SUBST h n) ->
+      (pure (_$T (idSubst +V (pure (_$T sg) <*> ez))) <*> weaks Subst sg h) ==
+      (pure (_$T sg) <*> (idSubst +V ez))
+    mapWeaks sg [] = 
+      (pure (_$T idSubst) <*> sg)
+        =[ id$T- sg >=
+      sg
+        =< sg -$Tid ]=
+      (pure (_$T sg) <*> idSubst)
+        [QED]
+    mapWeaks sg (ez & e) = reff _&_
+      =$= (
+        (pure (_$T ((idSubst +V (pure (_$T sg) <*> ez)) & (e $T sg))) <*> (pure (_^T oi o') <*> weaks Subst sg _))
+          =[ bVecMapMap _ _ _ >=
+        (pure ((_$T ((idSubst +V (pure (_$T sg) <*> ez)) & (e $T sg))) ` (_^T oi o')) <*> weaks Subst sg _)
+          =[ bVecMapExt  _ _ (\ t -> 
+             (t ^T oi o' $T ((idSubst +V (pure (_$T sg) <*> ez)) & (e $T sg)))
+               =[ t ^$T[ oi o' - _ ] >=
+             (t $T select oi (idSubst +V (pure (_$T sg) <*> ez)))
+               =[ (t $T_) $= selectoi _ >=
+             (t $T (idSubst +V (pure (_$T sg) <*> ez)))
+               [QED]) _ >=
+        (pure (_$T (idSubst +V (pure (_$T sg) <*> ez))) <*> weaks Subst sg _)
+          =[ mapWeaks sg ez >=
+        (pure (_$T sg) <*> (idSubst +V ez))
+          [QED])
+      =$= inflateId (e $T sg)
+
+    selectWeaks' : forall {p n m}(th : p <= n)(sg : SUBST n m) k ->
+      select (weaks Thin th k) (weaks Subst sg k) == weaks Subst (select th sg) k
+    selectWeaks' th sg ze = refl
+    selectWeaks' th sg (k su) = (_& _) $= (
+       select (weaks Thin th k) (pure (_^T oi o') <*> weaks Subst sg k)
+         =[ selectApp (weaks Thin th k) _ _ >=
+       (select (weaks Thin th k) (pure (_^T oi o')) <*> select (weaks Thin th k) (weaks Subst sg k))
+         =[ reff _<*>_ =$= selectPure (weaks Thin th k) _ =$= selectWeaks' th sg k >=
+       (pure (_^T oi o') <*> weaks Subst (select th sg) k)
          [QED])
-  =$= (#_ $= (_os $= oe! _ _))
-weaksLemma sg oz =
-  select oi sg
-    =[ selectoi sg >=
-  sg
-    =< bVecIdentity (_^T oi) _^Toi sg ]=
-  (pure (_^T oi) <*> sg)
-    [QED]
 
-subEnv : forall {hz n m} -> Env hz n -> SUBST [] n m -> Env hz m
-subEnv tz ez = bAll (\ {k} -> (_$T weaks ez k)) tz
-
-inflate : forall {hz n d} -> Term [] n d -> Term hz n d
-inflate ($ x) = $ x
-inflate (ta , td) = inflate ta , inflate td
-inflate (! t) = ! inflate t
-inflate [ e ] = [ inflate e ]
-inflate (() // ez)
-inflate (t :: T) = inflate t :: inflate T
-inflate (# i) = # i
-inflate (e / s) = inflate e / inflate s
-
-inflateLemma : forall {hz n d}(t : Term [] n d)(tz : Env hz n) -> (inflate t /T tz) == t
-inflateLemma ($ x) tz = refl
-inflateLemma (ta , td) tz = reff _,_ =$= inflateLemma ta tz =$= inflateLemma td tz
-inflateLemma (! t) tz = !_ $= inflateLemma t _
-inflateLemma [ e ] tz = [_] $= inflateLemma e tz
-inflateLemma (() // ez) tz
-inflateLemma (t :: T) tz = reff _::_ =$= inflateLemma t tz =$= inflateLemma T tz
-inflateLemma (# i) tz = refl
-inflateLemma (e / s) tz = reff _/_ =$= inflateLemma e tz =$= inflateLemma s tz
-
-module _ where
-  open Mor Subst
-  
-  _/$T[_-_] : forall {hz n m d}(t : Term hz n d)(tz : Env hz n)(ez : SUBST [] n m) ->
-    ((t $T (pure inflate <*> ez)) /T subEnv tz ez) == ((t /T tz) $T ez)
-  $ x       /$T[ tz - ez ] = refl
-  (ta , td) /$T[ tz - ez ] = reff _,_ =$= (ta /$T[ tz - ez ]) =$= (td /$T[ tz - ez ])
-  (! t)     /$T[ tz - ez ] = !_ $= (
-          ((t $T (weak (pure inflate <*> ez))) /T bAll (_^T (oi o') +th oi) (subEnv tz ez))
-             =[ {!!} >=
-          ((t $T (pure inflate <*> weak ez)) /T subEnv (bAll (_^T (oi o') +th oi) tz) (weak ez))
-             =[ t /$T[ _ - weak ez ] >=
-          ((t /T bAll (_^T (oi o') +th oi) tz) $T weak ez)
+    mapWeaks' : forall {p n m}(sg : SUBST p n)(th : n <= m) k ->
+                (pure (_^T weaks Thin th k) <*> weaks Subst sg k) ==
+                weaks Subst (pure (_^T th) <*> sg) k
+    mapWeaks' sg th ze = refl
+    mapWeaks' sg th (k su) = reff _&_
+      =$= ((pure (_^T weaks Thin th k os) <*> (pure (_^T oi o') <*> weaks Subst sg k))
+             =[ bVecMapMap _ _ _ >=
+           (pure ((_^T weaks Thin th k os) ` (_^T oi o')) <*> weaks Subst sg k)
+             =[ bVecMapExt _ _ (\ t ->
+                (t ^T oi o' ^T weaks Thin th k os)
+                   =< t ^T[ _ - _ ] ]=
+                (t ^T (oi - weaks Thin th k) o')
+                   =[ (t ^T_) $= (_o' $= (
+                       (oi - weaks Thin th k)
+                         =[ oi- _ >=
+                       weaks Thin th k
+                         =< _ -oi ]=
+                       (weaks Thin th k - oi)
+                         [QED])) >=
+                (t ^T (weaks Thin th k - oi) o')
+                   =[ t ^T[ _ - _ ] >=
+                (t ^T weaks Thin th k ^T oi o')
+                   [QED]) _ >=
+           (pure ((_^T oi o') ` (_^T weaks Thin th k)) <*> weaks Subst sg k)
+             =< bVecMapMap _ _ _ ]=
+           (pure (_^T oi o') <*> (pure (_^T weaks Thin th k) <*> weaks Subst sg k))
+             =[ (pure (_^T oi o') <*>_) $= mapWeaks' sg th k >=
+           (pure (_^T oi o') <*> weaks Subst (pure (_^T th) <*> sg) k)
              [QED])
-  [ e ]     /$T[ tz - ez ] = [_] $= (e /$T[ tz - ez ])
-  (h // fz) /$T[ tz - ez ] = {!!}
-  (t :: T)  /$T[ tz - ez ] = reff _::_ =$= (t /$T[ tz - ez ]) =$= (T /$T[ tz - ez ])
-  (# i)     /$T[ tz - ez ] =
-    ((proj i (pure inflate <*> ez)) /T subEnv tz ez)
-      =[ (_/T _) $= projApp i _ _ >=
-    (proj i (pure inflate) (proj i ez) /T  bAll (_$T weaks ez _) tz)
-      =[ (\ z -> z (proj i ez) /T  bAll (_$T weaks ez _) tz) $= projPure i inflate >=
-    (inflate (proj i ez) /T bAll (_$T weaks ez _) tz)
-      =[ inflateLemma (proj i ez) _ >=
-    (proj i ez)
-      [QED]
-  (e / s)   /$T[ tz - ez ] = reff _/_ =$= (e /$T[ tz - ez ]) =$= (s /$T[ tz - ez ])
--}
+      =$= (#_ $= (_os $= oe! _ _))
+
+    open META-COMMUTE Subst
+      (\ { (refl , tz) sg x ez -> 
+        (aproj x (bAll (_$T weaks Subst sg _) tz) $T (idSubst +V (pure (_$T sg) <*> ez)))
+            =[ (_$T (idSubst +V (pure (_$T sg) <*> ez))) $= aprojbAll x tz _ >=
+        (aproj x tz $T weaks Subst sg _ $T (idSubst +V (pure (_$T sg) <*> ez)))
+            =[ aproj x tz $T[ weaks Subst sg _ - idSubst +V (pure (_$T sg) <*> ez) ] >=
+        (aproj x tz $T (pure (_$T (idSubst +V (pure (_$T sg) <*> ez))) <*> weaks Subst sg _))
+            =[ (aproj x tz $T_) $= mapWeaks sg ez >=
+        (aproj x tz $T (pure (_$T sg) <*> (idSubst +V ez)))
+            =< aproj x tz $T[ (idSubst +V ez) - sg ] ]=
+        (aproj x tz $T (idSubst +V ez) $T sg)
+            [QED]     })
+      (\ { i th (refl , tz) -> inflated instantiation (proj i th) _  })
+      (\ { sg (refl , tz) -> (refl ,_) $= (
+        bAll (_^T (weaks Thin (oi o') _)) (bAll (_$T (weaks Subst sg _)) tz)
+          =[ bAllComp _ _ (_$T weaks Subst (pure (_^T oi o') <*> sg) _) (\ {k} t ->
+             (t $T weaks Subst sg k ^T weaks Thin (oi o') k)
+               =[ t $^T[ _ - _ ] >=
+             (t $T (pure (_^T weaks Thin (oi o') k) <*> weaks Subst sg k))
+               =[ (t $T_) $= mapWeaks' sg (oi o') k >=
+             (t $T weaks Subst (pure (_^T oi o') <*> sg) k)
+               [QED]) _ >=
+        bAll (_$T weaks Subst (pure (_^T oi o') <*> sg) _) tz
+          =< bAllComp _ _ (_$T weaks Subst (pure (_^T oi o') <*> sg) _) (\ {k} t ->
+             (t ^T weaks Thin (oi o') k $T weaks Subst (weak Subst sg) k)
+               =[ t ^$T[ _ - _ ] >=
+             (t $T select (weaks Thin (oi o') k) (weaks Subst (weak Subst sg) k))
+               =[ (t $T_) $= selectWeaks' (oi o') ((pure (_^T oi o') <*> sg) & # oe os) k >=
+             (t $T weaks Subst (select oi (pure (_^T oi o') <*> sg)) k)
+               =[ (\ z -> t $T weaks Subst z k) $= selectoi _ >=
+             (t $T weaks Subst (pure (_^T oi o') <*> sg) k)
+               [QED]) _ ]=
+        bAll (_$T (weaks Subst (weak Subst sg) _)) (bAll (_^T (weaks Thin (oi o') _)) tz)
+          [QED]) })
+      

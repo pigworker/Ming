@@ -268,3 +268,12 @@ pz +A [] = pz
 pz +A (qz & p) = pz +A qz & p
 infixl 3 _+A_
 
+bAllComp : forall {X : Set }{P Q R : X -> Set}
+  (f : {x : X} -> P x -> Q x)
+  (g : {x : X} -> Q x -> R x)
+  (h : {x : X} -> P x -> R x)
+  (q : {x : X}(p : P x) -> g (f p) == h p) ->
+  {xz : Bwd X}(pz : BAll P xz) -> bAll g (bAll f pz) == bAll h pz
+bAllComp f g h q [] = refl
+bAllComp f g h q (pz & p) = reff _&_ =$= bAllComp f g h q pz =$= q p
+  
