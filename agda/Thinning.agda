@@ -255,4 +255,34 @@ selectApp :  forall {n m S T}
 selectApp (th o') (fz & f) (sz & s) = selectApp th fz sz
 selectApp (th os) (fz & f) (sz & s) = (_& _) $= selectApp th fz sz
 selectApp oz [] [] = refl
-  
+
+selectApp' : forall {n m X}(th : n <= m) -> App' m X -> App' n X
+selectApp' th (pure' x) = pure' x
+selectApp' th (f <*>' a) = selectApp' th f <*>' selectApp' th a
+selectApp' th < x > = < select th x > 
+
+selectLemma : forall {n m X}(th : n <= m)(a : App' m X) ->
+  select th (app' a) == app' (selectApp' th a)
+selectLemma th (pure' x) = selectPure th x
+selectLemma th (f <*>' a) = 
+  select th (app' f <*> app' a)
+    =[ selectApp th _ _ >=
+  (select th (app' f) <*> select th (app' a))
+    =[ reff _<*>_ =$= selectLemma th f =$= selectLemma th a >=
+  (app' (selectApp' th f) <*> app' (selectApp' th a))
+    [QED]
+selectLemma th < x > = refl
+
+injecto' : forall {n m}{th ph : n <= m} -> (th o') == (ph o') -> th == ph
+injecto' refl = refl
+
+thinEqLemma : forall {n m}(th ph : n <= m) ->
+               (forall (i : 1 <= n) -> (i - th) == (i - ph)) ->
+               th == ph
+thinEqLemma (th o') (ph o') q = _o' $= thinEqLemma th ph \ i -> injecto' (q i)
+thinEqLemma (th o') (ph os) q with q (oe os)
+thinEqLemma (th o') (ph os) q | ()
+thinEqLemma (th os) (ph o') q with q (oe os)
+thinEqLemma (th os) (ph o') q | ()
+thinEqLemma (th os) (ph os) q = _os $= thinEqLemma th ph \ i -> injecto' (q (i o'))
+thinEqLemma oz oz q = refl

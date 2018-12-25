@@ -140,9 +140,15 @@ bVecInterchange : forall {n S T}(fz : BVec (S -> T) n)(s : S) ->
 bVecInterchange [] s = refl
 bVecInterchange (fz & f) s = (_& _) $= bVecInterchange fz s
 
-bVecMapMap : forall {n R S T}(f : S -> T)(g : R -> S)(rz : BVec R n) ->
-  (pure f <*> (pure g <*> rz)) == (pure (f ` g) <*> rz)
-bVecMapMap f g rz =
+bVecMapExt : forall {n S T}(f g : S -> T)(q : (s : S) -> f s == g s) ->
+             (sz : BVec S n) -> (pure f <*> sz) == (pure g <*> sz)
+bVecMapExt f g q [] = refl
+bVecMapExt f g q (sz & s) = reff _&_ =$= bVecMapExt f g q sz =$= q s
+
+bVecMapMap : forall {n R S T}(f : S -> T)(g : R -> S)(h : R -> T) ->
+  ((x : R) -> f (g x) == h x) ->
+  (rz : BVec R n) -> (pure f <*> (pure g <*> rz)) == (pure h <*> rz)
+bVecMapMap f g h q rz =
   (pure f <*> (pure g <*> rz))
     =[ bVecComposition (pure f) (pure g) rz >=
   (pure _`_ <*> pure f <*> pure g <*> rz)
@@ -150,12 +156,21 @@ bVecMapMap f g rz =
   (pure (\ h r -> f (h r)) <*> pure g <*> rz)
     =[ (_<*> rz) $= bVecHomomorphism (\ h r -> f (h r)) g  >=
   (pure (f ` g) <*> rz)
+    =[ bVecMapExt _ _ q _ >=
+  (pure h <*> rz)    
     [QED]
 
-bVecMapExt : forall {n S T}(f g : S -> T)(q : (s : S) -> f s == g s) ->
-             (sz : BVec S n) -> (pure f <*> sz) == (pure g <*> sz)
-bVecMapExt f g q [] = refl
-bVecMapExt f g q (sz & s) = reff _&_ =$= bVecMapExt f g q sz =$= q s
+bVecMapMapExt : forall {n R S S' T}
+  (f : S -> T)(g : R -> S)(f' : S' -> T)(g' : R -> S') ->
+  ((r : R) -> f (g r) == f' (g' r)) -> (rz : BVec R n) ->
+  (pure f <*> (pure g <*> rz)) == (pure f' <*> (pure g' <*> rz))
+bVecMapMapExt f g f' g' q rz = 
+  (pure f <*> (pure g <*> rz))
+    =[ bVecMapMap _ _ _ q _ >=
+  (pure (f' ` g') <*> rz)
+    =< bVecMapMap _ _ _ (\ _ -> refl) _ ]=
+  (pure f' <*> (pure g' <*> rz))
+    [QED]
 
 bVecMapCat : forall {S T}(f : S -> T){n m}(xz : BVec S n)(yz : BVec S m) ->
   (pure f <*> (xz +V yz)) == ((pure f <*> xz) +V (pure f <*> yz))
@@ -192,7 +207,7 @@ appCatLemma f sn (tn <*>' xz) =
   (appN' (appCat (\ s g t -> f s (g t)) sn tn) <*> xz)
     =[ (_<*> xz) $= appCatLemma _ sn tn >=
   (pure (\ s g t -> f s (g t)) <*> appN' sn <*> appN' tn <*> xz)
-    =< (\ z -> z <*> appN' tn <*> xz) $= bVecMapMap _`_ f (appN' sn) ]=
+    =< (\ z -> z <*> appN' tn <*> xz) $= bVecMapMap _`_ f _ (\ _ -> refl) (appN' sn) ]=
   (pure _`_ <*> (pure f <*> appN' sn) <*> appN' tn <*> xz)
     =< bVecComposition (pure f <*> appN' sn) (appN' tn) xz ]=
   (pure f <*> appN' sn <*> (appN' tn <*> xz))
@@ -210,13 +225,13 @@ appCatLemma f (sn <*>' xz) (pure' t) =
   (pure (\ g t s -> f (g s) t) <*> appN' sn <*> appN' (pure' t) <*> xz)
     =[ (_<*> xz) $= bVecInterchange (pure (\ g t s -> f (g s) t) <*> appN' sn) t >=
   (pure (\ h -> h t) <*> (pure (\ g t s -> f (g s) t) <*> appN' sn) <*> xz)
-    =[ (_<*> xz) $= bVecMapMap  (\ h -> h t) (\ g t s -> f (g s) t) (appN' sn) >=
+    =[ (_<*> xz) $= bVecMapMap  (\ h -> h t) (\ g t s -> f (g s) t) _ (\ _ -> refl) (appN' sn) >=
   (pure (\ r s -> f (r s) t) <*> appN' sn <*> xz)
     =< (\ z -> z <*> appN' sn <*> xz) $= bVecHomomorphism (\ h g r -> h (g r))(\ r -> f r t) ]=
   (pure (\ h g r -> h (g r)) <*> pure (\ r -> f r t) <*> appN' sn <*> xz)
     =< bVecComposition (pure (\ r -> f r t)) (appN' sn) xz  ]=
   (pure (\ r -> f r t) <*> (appN' sn <*> xz))
-    =< bVecMapMap (\ h -> h t) f (appN' sn <*> xz) ]=
+    =< bVecMapMap (\ h -> h t) f _ (\ _ -> refl) (appN' sn <*> xz) ]=
   (pure (\ h -> h t) <*> (pure f <*> (appN' sn <*> xz)))
     =< bVecInterchange (pure f <*> (appN' sn <*> xz)) t ]=
   (pure f <*> (appN' sn <*> xz) <*> pure t)
